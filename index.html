@@ -3,10 +3,536 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>momo2</title>
+  <title>Momo Invaders</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #05070d;
+      --panel: #101522;
+      --text: #f7fbff;
+      --muted: #9fb2c8;
+      --cyan: #43e8ff;
+      --lime: #9cff57;
+      --pink: #ff5fa2;
+      --gold: #ffd166;
+      --danger: #ff4d4d;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+    }
+
+    body {
+      align-items: center;
+      background:
+        radial-gradient(circle at 22% 18%, rgba(67, 232, 255, 0.14), transparent 24rem),
+        radial-gradient(circle at 80% 8%, rgba(255, 95, 162, 0.12), transparent 22rem),
+        linear-gradient(180deg, #090d18 0%, var(--bg) 58%, #020309 100%);
+      color: var(--text);
+      display: flex;
+      font-family: "Trebuchet MS", Arial, sans-serif;
+      justify-content: center;
+      min-height: 100%;
+      overflow: hidden;
+      padding: 20px;
+    }
+
+    .game-shell {
+      display: grid;
+      gap: 12px;
+      width: min(94vw, 840px);
+    }
+
+    .hud {
+      align-items: center;
+      display: grid;
+      gap: 10px;
+      grid-template-columns: 1fr auto auto;
+      min-height: 48px;
+    }
+
+    h1 {
+      font-size: clamp(1.3rem, 3vw, 2.1rem);
+      letter-spacing: 0;
+      line-height: 1;
+      margin: 0;
+      text-transform: uppercase;
+    }
+
+    .meter {
+      background: rgba(16, 21, 34, 0.82);
+      border: 1px solid rgba(255, 255, 255, 0.13);
+      border-radius: 8px;
+      color: var(--muted);
+      font-size: 0.95rem;
+      min-width: 98px;
+      padding: 8px 12px;
+      text-align: right;
+    }
+
+    .meter strong {
+      color: var(--text);
+      display: inline-block;
+      min-width: 3ch;
+    }
+
+    .stage-wrap {
+      aspect-ratio: 4 / 3;
+      background: #03050b;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 8px;
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45), inset 0 0 32px rgba(67, 232, 255, 0.08);
+      overflow: hidden;
+      position: relative;
+      width: 100%;
+    }
+
+    canvas {
+      display: block;
+      height: 100%;
+      image-rendering: pixelated;
+      width: 100%;
+    }
+
+    .overlay {
+      align-items: center;
+      background: rgba(3, 5, 11, 0.72);
+      display: flex;
+      inset: 0;
+      justify-content: center;
+      opacity: 0;
+      padding: 22px;
+      pointer-events: none;
+      position: absolute;
+      text-align: center;
+      transition: opacity 160ms ease;
+    }
+
+    .overlay.is-visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .message {
+      max-width: 30rem;
+    }
+
+    .message h2 {
+      font-size: clamp(2rem, 8vw, 4.3rem);
+      line-height: 0.95;
+      margin: 0 0 12px;
+      text-transform: uppercase;
+    }
+
+    .message p,
+    .controls {
+      color: var(--muted);
+      font-size: clamp(0.9rem, 2.5vw, 1rem);
+      margin: 0;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      justify-content: center;
+      min-height: 24px;
+    }
+
+    kbd {
+      background: rgba(255, 255, 255, 0.11);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: inherit;
+      padding: 2px 7px;
+    }
+
+    @media (max-width: 620px) {
+      body {
+        padding: 12px;
+      }
+
+      .hud {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      h1 {
+        grid-column: 1 / -1;
+      }
+
+      .meter {
+        min-width: 0;
+        text-align: left;
+      }
+    }
+  </style>
 </head>
 <body>
-  <h1>momo2</h1>
-  <p>このページは正常に公開されています。</p>
+  <main class="game-shell" aria-label="Momo Invaders game">
+    <section class="hud" aria-label="Game status">
+      <h1>Momo Invaders</h1>
+      <div class="meter">Score <strong id="score">0</strong></div>
+      <div class="meter">Lives <strong id="lives">3</strong></div>
+    </section>
+
+    <section class="stage-wrap">
+      <canvas id="game" width="800" height="600" aria-label="Space invaders style arcade game"></canvas>
+      <div id="overlay" class="overlay is-visible">
+        <div class="message">
+          <h2 id="headline">Ready?</h2>
+          <p id="message">Press Space to start and fire.</p>
+        </div>
+      </div>
+    </section>
+
+    <p class="controls">
+      <span><kbd>←</kbd> <kbd>→</kbd> Move</span>
+      <span><kbd>Space</kbd> Fire / Restart</span>
+    </p>
+  </main>
+
+  <script>
+    const canvas = document.querySelector("#game");
+    const ctx = canvas.getContext("2d");
+    const scoreEl = document.querySelector("#score");
+    const livesEl = document.querySelector("#lives");
+    const overlay = document.querySelector("#overlay");
+    const headline = document.querySelector("#headline");
+    const message = document.querySelector("#message");
+
+    const keys = new Set();
+    const state = {
+      running: false,
+      over: false,
+      win: false,
+      score: 0,
+      lives: 3,
+      wave: 1,
+      lastTime: 0,
+      stars: [],
+      bullets: [],
+      enemyBullets: [],
+      invaders: [],
+      fleetDir: 1,
+      fleetStepTimer: 0,
+      enemyShotTimer: 0,
+      player: { x: 380, y: 548, w: 46, h: 28, cooldown: 0, blink: 0 }
+    };
+
+    function resetGame() {
+      state.running = true;
+      state.over = false;
+      state.win = false;
+      state.score = 0;
+      state.lives = 3;
+      state.wave = 1;
+      state.bullets = [];
+      state.enemyBullets = [];
+      state.fleetDir = 1;
+      state.player.x = 380;
+      state.player.cooldown = 0;
+      state.player.blink = 0;
+      createStars();
+      createInvaders();
+      syncHud();
+      hideOverlay();
+    }
+
+    function createStars() {
+      state.stars = Array.from({ length: 86 }, () => ({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        r: Math.random() * 1.7 + 0.4,
+        s: Math.random() * 30 + 18
+      }));
+    }
+
+    function createInvaders() {
+      const rows = 4 + Math.min(state.wave - 1, 2);
+      const cols = 10;
+      const startX = 92;
+      const startY = 74;
+      const gapX = 58;
+      const gapY = 44;
+      state.invaders = [];
+
+      for (let row = 0; row < rows; row += 1) {
+        for (let col = 0; col < cols; col += 1) {
+          state.invaders.push({
+            x: startX + col * gapX,
+            y: startY + row * gapY,
+            w: 34,
+            h: 24,
+            row,
+            phase: Math.random() * Math.PI
+          });
+        }
+      }
+    }
+
+    function syncHud() {
+      scoreEl.textContent = String(state.score);
+      livesEl.textContent = String(state.lives);
+    }
+
+    function showOverlay(title, text) {
+      headline.textContent = title;
+      message.textContent = text;
+      overlay.classList.add("is-visible");
+    }
+
+    function hideOverlay() {
+      overlay.classList.remove("is-visible");
+    }
+
+    function shoot() {
+      if (state.player.cooldown > 0 || !state.running) return;
+      state.bullets.push({
+        x: state.player.x + state.player.w / 2 - 2,
+        y: state.player.y - 12,
+        w: 4,
+        h: 16,
+        vy: -520
+      });
+      state.player.cooldown = 0.24;
+    }
+
+    function enemyShoot() {
+      if (state.invaders.length === 0) return;
+      const bottomInvaders = state.invaders.filter((invader) => {
+        return !state.invaders.some((other) => (
+          other !== invader &&
+          Math.abs(other.x - invader.x) < 8 &&
+          other.y > invader.y
+        ));
+      });
+      const invader = bottomInvaders[Math.floor(Math.random() * bottomInvaders.length)];
+      state.enemyBullets.push({
+        x: invader.x + invader.w / 2 - 3,
+        y: invader.y + invader.h,
+        w: 6,
+        h: 15,
+        vy: 230 + state.wave * 20
+      });
+    }
+
+    function update(dt) {
+      if (!state.running) return;
+
+      const playerSpeed = 340;
+      const left = keys.has("ArrowLeft") || keys.has("KeyA");
+      const right = keys.has("ArrowRight") || keys.has("KeyD");
+      if (left) state.player.x -= playerSpeed * dt;
+      if (right) state.player.x += playerSpeed * dt;
+      state.player.x = Math.max(16, Math.min(canvas.width - state.player.w - 16, state.player.x));
+      state.player.cooldown = Math.max(0, state.player.cooldown - dt);
+      state.player.blink = Math.max(0, state.player.blink - dt);
+
+      state.stars.forEach((star) => {
+        star.y += star.s * dt;
+        if (star.y > canvas.height) {
+          star.x = Math.random() * canvas.width;
+          star.y = -4;
+        }
+      });
+
+      const fleetSpeed = 28 + state.wave * 10 + (40 - state.invaders.length) * 0.95;
+      let edgeHit = false;
+      state.invaders.forEach((invader) => {
+        invader.x += state.fleetDir * fleetSpeed * dt;
+        invader.phase += dt * 6;
+        if (invader.x < 24 || invader.x + invader.w > canvas.width - 24) {
+          edgeHit = true;
+        }
+      });
+      if (edgeHit) {
+        state.fleetDir *= -1;
+        state.invaders.forEach((invader) => {
+          invader.y += 18;
+          invader.x += state.fleetDir * 8;
+        });
+      }
+
+      state.bullets.forEach((bullet) => bullet.y += bullet.vy * dt);
+      state.enemyBullets.forEach((bullet) => bullet.y += bullet.vy * dt);
+      state.bullets = state.bullets.filter((bullet) => bullet.y + bullet.h > 0);
+      state.enemyBullets = state.enemyBullets.filter((bullet) => bullet.y < canvas.height + 20);
+
+      state.enemyShotTimer -= dt;
+      if (state.enemyShotTimer <= 0) {
+        enemyShoot();
+        state.enemyShotTimer = Math.max(0.38, 1.05 - state.wave * 0.1 - Math.random() * 0.32);
+      }
+
+      handleCollisions();
+
+      if (state.invaders.some((invader) => invader.y + invader.h >= state.player.y - 8)) {
+        endGame(false);
+      }
+
+      if (state.invaders.length === 0) {
+        state.wave += 1;
+        state.score += 250;
+        state.bullets = [];
+        state.enemyBullets = [];
+        state.fleetDir = 1;
+        createInvaders();
+        syncHud();
+      }
+    }
+
+    function handleCollisions() {
+      for (let b = state.bullets.length - 1; b >= 0; b -= 1) {
+        const bullet = state.bullets[b];
+        const hitIndex = state.invaders.findIndex((invader) => overlaps(bullet, invader));
+        if (hitIndex !== -1) {
+          const [hit] = state.invaders.splice(hitIndex, 1);
+          state.bullets.splice(b, 1);
+          state.score += 30 + (4 - hit.row) * 10;
+          syncHud();
+        }
+      }
+
+      if (state.player.blink > 0) return;
+
+      const hitIndex = state.enemyBullets.findIndex((bullet) => overlaps(bullet, state.player));
+      if (hitIndex !== -1) {
+        state.enemyBullets.splice(hitIndex, 1);
+        state.lives -= 1;
+        state.player.blink = 1.15;
+        syncHud();
+        if (state.lives <= 0) {
+          endGame(false);
+        }
+      }
+    }
+
+    function overlaps(a, b) {
+      return a.x < b.x + b.w &&
+        a.x + a.w > b.x &&
+        a.y < b.y + b.h &&
+        a.y + a.h > b.y;
+    }
+
+    function endGame(win) {
+      state.running = false;
+      state.over = true;
+      state.win = win;
+      showOverlay(win ? "Clear!" : "Game Over", `Score ${state.score}. Press Space to restart.`);
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawBackground();
+      drawInvaders();
+      drawBullets();
+      drawPlayer();
+      drawGround();
+    }
+
+    function drawBackground() {
+      const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      gradient.addColorStop(0, "#071120");
+      gradient.addColorStop(0.56, "#05070d");
+      gradient.addColorStop(1, "#020308");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      state.stars.forEach((star) => {
+        ctx.globalAlpha = 0.45 + Math.sin((star.y + star.x) * 0.06) * 0.18;
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(star.x, star.y, star.r, star.r);
+      });
+      ctx.globalAlpha = 1;
+    }
+
+    function drawInvaders() {
+      state.invaders.forEach((invader) => {
+        const bob = Math.sin(invader.phase) * 2;
+        ctx.fillStyle = invader.row % 2 === 0 ? "#43e8ff" : "#9cff57";
+        ctx.fillRect(invader.x + 6, invader.y + bob, invader.w - 12, invader.h);
+        ctx.fillRect(invader.x, invader.y + 8 + bob, invader.w, 10);
+        ctx.fillStyle = "#05070d";
+        ctx.fillRect(invader.x + 9, invader.y + 8 + bob, 5, 5);
+        ctx.fillRect(invader.x + invader.w - 14, invader.y + 8 + bob, 5, 5);
+        ctx.fillStyle = "#ff5fa2";
+        ctx.fillRect(invader.x + 3, invader.y + invader.h + bob, 6, 5);
+        ctx.fillRect(invader.x + invader.w - 9, invader.y + invader.h + bob, 6, 5);
+      });
+    }
+
+    function drawBullets() {
+      ctx.fillStyle = "#ffd166";
+      state.bullets.forEach((bullet) => {
+        ctx.fillRect(bullet.x, bullet.y, bullet.w, bullet.h);
+      });
+
+      ctx.fillStyle = "#ff4d4d";
+      state.enemyBullets.forEach((bullet) => {
+        ctx.fillRect(bullet.x, bullet.y, bullet.w, bullet.h);
+      });
+    }
+
+    function drawPlayer() {
+      if (state.player.blink > 0 && Math.floor(state.player.blink * 12) % 2 === 0) return;
+      const p = state.player;
+      ctx.fillStyle = "#f7fbff";
+      ctx.fillRect(p.x + 16, p.y - 10, 14, 10);
+      ctx.fillStyle = "#43e8ff";
+      ctx.fillRect(p.x, p.y + 8, p.w, 13);
+      ctx.fillRect(p.x + 10, p.y, p.w - 20, 18);
+      ctx.fillStyle = "#9cff57";
+      ctx.fillRect(p.x + 20, p.y - 10, 6, 19);
+      ctx.fillStyle = "#ff5fa2";
+      ctx.fillRect(p.x + 5, p.y + 21, 8, 5);
+      ctx.fillRect(p.x + p.w - 13, p.y + 21, 8, 5);
+    }
+
+    function drawGround() {
+      ctx.fillStyle = "rgba(67, 232, 255, 0.28)";
+      ctx.fillRect(0, 584, canvas.width, 2);
+      ctx.fillStyle = "rgba(156, 255, 87, 0.16)";
+      for (let x = 0; x < canvas.width; x += 28) {
+        ctx.fillRect(x, 590, 14, 2);
+      }
+    }
+
+    function loop(time) {
+      const dt = Math.min(0.033, (time - state.lastTime) / 1000 || 0);
+      state.lastTime = time;
+      update(dt);
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    window.addEventListener("keydown", (event) => {
+      if (["ArrowLeft", "ArrowRight", "Space"].includes(event.code)) {
+        event.preventDefault();
+      }
+      keys.add(event.code);
+      if (event.code === "Space") {
+        if (!state.running) {
+          resetGame();
+        } else {
+          shoot();
+        }
+      }
+    });
+
+    window.addEventListener("keyup", (event) => {
+      keys.delete(event.code);
+    });
+
+    createStars();
+    draw();
+    requestAnimationFrame(loop);
+  </script>
 </body>
 </html>
